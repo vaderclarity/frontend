@@ -7,11 +7,12 @@ function App() {
     const [translatedText, setTranslatedText] = useState("");
     const [sourceLanguage, setSourceLanguage] = useState("auto");
     const [targetLanguage, setTargetLanguage] = useState("fr");
+    const [isLoading, setIsLoading] = useState(false); // New loading state
 
     // Function to handle speech recognition
     const handleVoiceInput = () => {
         const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        recognition.lang = sourceLanguage !== "auto" ? sourceLanguage : "en-US"; // Set input language
+        recognition.lang = sourceLanguage !== "auto" ? sourceLanguage : "en-US";
         recognition.start();
 
         recognition.onresult = (event) => {
@@ -26,19 +27,40 @@ function App() {
 
     // Function to handle translation
     const translateText = async () => {
-        const response = await fetch("backend-production-c242.up.railway.app/translate/", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, target_language: targetLanguage }),
-        });
+        if (!text.trim()) {
+            alert("Please enter text to translate.");
+            return;
+        }
 
-        const data = await response.json();
-        setTranslatedText(data.translated_text);
+        try {
+            setIsLoading(true); // Set loading state
+            setTranslatedText("Translating..."); // Provide immediate UI feedback
+
+            const response = await fetch("https://backend-production-d990.up.railway.app/translate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text, target_language: targetLanguage }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || "Translation failed.");
+            }
+
+            setTranslatedText(data.translated_text);
+        } catch (error) {
+            console.error("Translation Error:", error);
+            alert(`Error: ${error.message}`);
+            setTranslatedText(""); // Reset translated text if an error occurs
+        } finally {
+            setIsLoading(false); // Reset loading state
+        }
     };
 
     // Function to handle text-to-speech playback
     const handleSpeak = () => {
-        if (!translatedText) return;
+        if (!translatedText || translatedText === "Translating...") return;
         const utterance = new SpeechSynthesisUtterance(translatedText);
         utterance.lang = targetLanguage;
         speechSynthesis.speak(utterance);
@@ -47,7 +69,7 @@ function App() {
     return (
         <div className="container">
             <h1>Healthcare Translation App</h1>
-            
+
             <div className="controls">
                 <button onClick={handleVoiceInput}>🎤 Speak</button>
                 <input
@@ -76,7 +98,9 @@ function App() {
                 </select>
             </div>
 
-            <button onClick={translateText}>Translate</button>
+            <button onClick={translateText} disabled={isLoading}>
+                {isLoading ? "Translating..." : "Translate"}
+            </button>
 
             <div className="transcript-container">
                 <div className="transcript">
@@ -89,7 +113,9 @@ function App() {
                 </div>
             </div>
 
-            <button onClick={handleSpeak} disabled={!translatedText}>🔊 Speak</button>
+            <button onClick={handleSpeak} disabled={!translatedText || translatedText === "Translating..."}>
+                🔊 Speak
+            </button>
         </div>
     );
 }
