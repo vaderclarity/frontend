@@ -1,18 +1,34 @@
 import "./index.css";
 import "./App.css";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 function App() {
     const [text, setText] = useState("");
     const [translatedText, setTranslatedText] = useState("");
     const [sourceLanguage, setSourceLanguage] = useState("auto");
     const [targetLanguage, setTargetLanguage] = useState("fr");
-    const [isLoading, setIsLoading] = useState(false); // New loading state
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [darkMode, setDarkMode] = useState(
+        window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+    );
 
-    // Function to handle speech recognition
+    useEffect(() => {
+        const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        const handleChange = (e) => setDarkMode(e.matches);
+        mediaQuery.addEventListener("change", handleChange);
+        return () => mediaQuery.removeEventListener("change", handleChange);
+    }, []);
+
+    const toggleDarkMode = () => {
+        setDarkMode(!darkMode);
+    };
+
     const handleVoiceInput = () => {
         const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         recognition.lang = sourceLanguage !== "auto" ? sourceLanguage : "en-US";
+
+        setText("🎤 Listening...");
         recognition.start();
 
         recognition.onresult = (event) => {
@@ -22,19 +38,20 @@ function App() {
 
         recognition.onerror = (event) => {
             console.error("Speech Recognition Error:", event.error);
+            setError("Speech recognition failed. Try again.");
         };
     };
 
-    // Function to handle translation
     const translateText = async () => {
         if (!text.trim()) {
-            alert("Please enter text to translate.");
+            setError("Please enter text to translate.");
             return;
         }
 
         try {
-            setIsLoading(true); // Set loading state
-            setTranslatedText("Translating..."); // Provide immediate UI feedback
+            setIsLoading(true);
+            setTranslatedText("🔄 Translating...");
+            setError(null);
 
             const response = await fetch("https://backend-production-d990.up.railway.app/translate", {
                 method: "POST",
@@ -45,77 +62,84 @@ function App() {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || "Translation failed.");
+                throw new Error(data.detail || "Translation failed.");
             }
 
             setTranslatedText(data.translated_text);
         } catch (error) {
             console.error("Translation Error:", error);
-            alert(`Error: ${error.message}`);
-            setTranslatedText(""); // Reset translated text if an error occurs
+            setError(error.message);
         } finally {
-            setIsLoading(false); // Reset loading state
+            setIsLoading(false);
         }
     };
 
-    // Function to handle text-to-speech playback
     const handleSpeak = () => {
-        if (!translatedText || translatedText === "Translating...") return;
+        if (!translatedText) return;
         const utterance = new SpeechSynthesisUtterance(translatedText);
         utterance.lang = targetLanguage;
         speechSynthesis.speak(utterance);
     };
 
     return (
-        <div className="container">
-            <h1>Healthcare Translation App</h1>
+        <div className={`app-container ${darkMode ? "dark-mode" : "light-mode"}`}>
+            <div className="container">
+                <h1>Healthcare Translation App</h1>
 
-            <div className="controls">
-                <button onClick={handleVoiceInput}>🎤 Speak</button>
-                <input
-                    type="text"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="Enter text..."
-                />
-            </div>
+                <button className="toggle-btn" onClick={toggleDarkMode}>
+                    {darkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}
+                </button>
 
-            <div className="language-selection">
-                <label>Source Language:</label>
-                <select value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value)}>
-                    <option value="auto">Auto Detect</option>
-                    <option value="en">English</option>
-                    <option value="fr">French</option>
-                    <option value="es">Spanish</option>
-                    <option value="de">German</option>
-                </select>
-
-                <label>Target Language:</label>
-                <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)}>
-                    <option value="fr">French</option>
-                    <option value="es">Spanish</option>
-                    <option value="de">German</option>
-                </select>
-            </div>
-
-            <button onClick={translateText} disabled={isLoading}>
-                {isLoading ? "Translating..." : "Translate"}
-            </button>
-
-            <div className="transcript-container">
-                <div className="transcript">
-                    <h2>Original:</h2>
-                    <p>{text}</p>
+                <div className="controls">
+                    <button onClick={handleVoiceInput} className="hover-effect">🎤 Speak</button>
+                    <input
+                        type="text"
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Enter text..."
+                        className="hover-input"
+                    />
                 </div>
-                <div className="transcript">
-                    <h2>Translated:</h2>
-                    <p>{translatedText}</p>
-                </div>
-            </div>
 
-            <button onClick={handleSpeak} disabled={!translatedText || translatedText === "Translating..."}>
-                🔊 Speak
-            </button>
+                <div className="language-selection">
+                    <label>Source:</label>
+                    <select value={sourceLanguage} onChange={(e) => setSourceLanguage(e.target.value)} className="hover-select">
+                        <option value="auto">Auto Detect</option>
+                        <option value="en">English</option>
+                        <option value="fr">French</option>
+                        <option value="es">Spanish</option>
+                        <option value="de">German</option>
+                    </select>
+
+                    <label>Target:</label>
+                    <select value={targetLanguage} onChange={(e) => setTargetLanguage(e.target.value)} className="hover-select">
+                        <option value="fr">French</option>
+                        <option value="es">Spanish</option>
+                        <option value="de">German</option>
+                    </select>
+                </div>
+
+                <button onClick={translateText} disabled={isLoading} className="hover-effect">
+                    {isLoading ? <span className="spinner"></span> : "Translate"}
+                </button>
+
+                {error && <p className="error-message">{error}</p>}
+
+                <div className="transcript-container">
+                    <div className="transcript">
+                        <h2>Original:</h2>
+                        <p>{text}</p>
+                    </div>
+                    <div className="transcript">
+                        <h2>Translated:</h2>
+                        <p>{translatedText}</p>
+                    </div>
+                </div>
+
+                <button onClick={handleSpeak} disabled={!translatedText || isLoading} className="hover-effect">
+                    🔊 Speak
+                </button>
+            </div>
         </div>
     );
 }
